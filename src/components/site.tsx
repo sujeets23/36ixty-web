@@ -4,7 +4,7 @@ import { ArrowDown, ArrowRight, Instagram, Linkedin, Menu, X } from "lucide-reac
 import { FormEvent, useEffect, useState } from "react";
 
 import logoAsset from "../assets/logo.png.asset.json";
-import heroAsset from "../assets/hero.jpg.asset.json";
+import heroAsset from "../assets/event-hero.webp.asset.json";
 import aboutAsset from "../assets/about.jpg.asset.json";
 import corporateAsset from "../assets/corporate.png.asset.json";
 import aiAsset from "../assets/ai.jpg.asset.json";
