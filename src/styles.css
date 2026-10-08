@@ -256,3 +256,27 @@
  .hero{padding:0}.hero-media{width:100%;height:calc(100dvh - 68px)}.hero-copy{bottom:9%}.display-title{font-size:54px}.service-grid,.case-grid{grid-template-columns:1fr}.service-card{min-height:390px}.stats{padding:65px 5vw;gap:45px 15px}.stats strong{font-size:31px}.page-hero{min-height:580px;height:calc(100dvh - 68px)}.page-hero h1{font-size:58px}.editorial-row{padding:48px 0;gap:16px}.contact-section form{grid-template-columns:1fr}.contact-section label:nth-child(4){grid-column:auto}.footer-grid{grid-template-columns:1fr}.footer-grid>p{grid-column:auto}.footer-wordmark{font-size:22vw}.case-grid{padding-bottom:90px}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* Hide Lovable mark / badge */
+#lovable-badge,
+#lovable-badge-container,
+[id*="lovable-badge"],
+[id^="lovable"],
+[class*="lovable-badge"],
+[data-lovable-badge],
+[data-lovable],
+a[href*="lovable.dev"],
+iframe[src*="lovable.dev"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  max-width: 0 !important;
+  max-height: 0 !important;
+  position: absolute !important;
+  z-index: -9999 !important;
+  clip-path: inset(100%) !important;
+}
+

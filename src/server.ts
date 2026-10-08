@@ -44,9 +44,41 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+import fs from "node:fs";
+import path from "node:path";
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      const url = new URL(request.url);
+      let slug = url.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+      if (!slug) slug = "index";
+      if (slug.endsWith(".html")) slug = slug.slice(0, -5);
+
+      let targetFile = "";
+      if (slug === "index") {
+        if (fs.existsSync(path.resolve(process.cwd(), "homepage.html"))) {
+          targetFile = path.resolve(process.cwd(), "homepage.html");
+        } else if (fs.existsSync(path.resolve(process.cwd(), "cloned-pages", "index.html"))) {
+          targetFile = path.resolve(process.cwd(), "cloned-pages", "index.html");
+        }
+      } else if (slug === "contact" && fs.existsSync(path.resolve(process.cwd(), "contact.html"))) {
+        targetFile = path.resolve(process.cwd(), "contact.html");
+      } else {
+        const candidate = path.resolve(process.cwd(), "cloned-pages", `${slug}.html`);
+        if (fs.existsSync(candidate)) {
+          targetFile = candidate;
+        }
+      }
+
+      if (targetFile) {
+        const content = fs.readFileSync(targetFile, "utf8");
+        return new Response(content, {
+          status: 200,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      }
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
@@ -59,3 +91,4 @@ export default {
     }
   },
 };
+

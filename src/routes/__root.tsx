@@ -104,6 +104,30 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+              #lovable-badge,
+              #lovable-badge-container,
+              [id*="lovable-badge"],
+              [id^="lovable"],
+              [class*="lovable-badge"],
+              [data-lovable-badge],
+              [data-lovable],
+              a[href*="lovable.dev"],
+              iframe[src*="lovable.dev"] {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+                position: absolute !important;
+                z-index: -9999 !important;
+                width: 0 !important;
+                height: 0 !important;
+              }
+            `,
+          }}
+        />
       </head>
       <body>
         {children}
@@ -115,6 +139,42 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const removeLovableElements = () => {
+      const selectors = [
+        "#lovable-badge",
+        "#lovable-badge-container",
+        '[id*="lovable-badge"]',
+        '[id^="lovable"]',
+        '[class*="lovable-badge"]',
+        "[data-lovable-badge]",
+        "[data-lovable]",
+        'a[href*="lovable.dev"]',
+        'iframe[src*="lovable.dev"]',
+      ];
+      try {
+        const elements = document.querySelectorAll(selectors.join(","));
+        elements.forEach((el) => el.remove());
+      } catch {
+        // no-op
+      }
+    };
+
+    removeLovableElements();
+    const observer = new MutationObserver(() => {
+      removeLovableElements();
+    });
+
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
