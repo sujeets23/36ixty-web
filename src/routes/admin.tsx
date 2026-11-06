@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import {
   BarChart3, Calendar, Users, DollarSign, Settings, FileText,
   Search, ArrowUpRight, CheckCircle2, Clock, AlertCircle, Plus,
-  Menu, X, LogOut, Home, Layers, Sparkles, Trash2
+  Menu, X, LogOut, Home, Layers, Sparkles, Github, Check
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -15,7 +15,7 @@ export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
       { title: "Admin Dashboard | 36ixty Booths" },
-      { name: "description", content: "Manage enquiries, bookings, services and site content for 36ixty Booths." },
+      { name: "description", content: "Manage enquiries, bookings, services and site content for 36ixty Booths with GitHub Commit publishing." },
     ],
   }),
 });
@@ -61,6 +61,80 @@ export function AdminDashboard() {
   const [enquiries, setEnquiries] = useState(initialEnquiries);
   const [services, setServices] = useState(initialServices);
 
+  // GitHub Commit Config state
+  const [ghOwner, setGhOwner] = useState("36ixty");
+  const [ghRepo, setGhRepo] = useState("36ixty-web");
+  const [ghBranch, setGhBranch] = useState("main");
+  const [ghToken, setGhToken] = useState("");
+  const [commitStatus, setCommitStatus] = useState<string | null>(null);
+  const [isCommitting, setIsCommitting] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setGhOwner(localStorage.getItem("gh_owner") || "36ixty");
+    setGhRepo(localStorage.getItem("gh_repo") || "36ixty-web");
+    setGhBranch(localStorage.getItem("gh_branch") || "main");
+    setGhToken(localStorage.getItem("gh_token") || "");
+  }, []);
+
+  const saveGhSettings = (e: FormEvent) => {
+    e.preventDefault();
+    localStorage.setItem("gh_owner", ghOwner);
+    localStorage.setItem("gh_repo", ghRepo);
+    localStorage.setItem("gh_branch", ghBranch);
+    localStorage.setItem("gh_token", ghToken);
+    setCommitStatus("GitHub settings saved successfully!");
+    setTimeout(() => setCommitStatus(null), 3000);
+  };
+
+  const commitContentToGitHub = async (filename: string, contentJson: any, message: string) => {
+    if (!ghToken) {
+      setCommitStatus("Warning: No GitHub token configured in Settings. Saved to local state only.");
+      return;
+    }
+    setIsCommitting(true);
+    try {
+      const path = `src/content/${filename}`;
+      const url = `https://api.github.com/repos/${ghOwner}/${ghRepo}/contents/${path}`;
+
+      let sha: string | undefined = undefined;
+      const getRes = await fetch(url, {
+        headers: { Authorization: `Bearer ${ghToken}`, Accept: "application/vnd.github+json" }
+      });
+      if (getRes.ok) {
+        const fileData = await getRes.json();
+        sha = fileData.sha;
+      }
+
+      const putRes = await fetch(url, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${ghToken}`,
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: message || `cms: add/update ${filename}`,
+          content: btoa(unescape(encodeURIComponent(JSON.stringify(contentJson, null, 2)))),
+          branch: ghBranch,
+          sha,
+        }),
+      });
+
+      if (putRes.ok) {
+        setCommitStatus(`Successfully committed ${filename} to GitHub (${ghOwner}/${ghRepo})!`);
+      } else {
+        const err = await putRes.json();
+        setCommitStatus(`GitHub commit error: ${err.message || 'Unknown error'}`);
+      }
+    } catch (err: any) {
+      setCommitStatus(`Commit failed: ${err.message}`);
+    } finally {
+      setIsCommitting(false);
+      setTimeout(() => setCommitStatus(null), 5000);
+    }
+  };
+
   // Modal / Form states
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [showEnquiryModal, setShowEnquiryModal] = useState(false);
@@ -76,9 +150,10 @@ export function AdminDashboard() {
   const [newEventDate, setNewEventDate] = useState("");
   const [newAmount, setNewAmount] = useState("£2,000");
 
-  const handleAddService = (e: FormEvent) => {
+  const handleAddService = async (e: FormEvent) => {
     e.preventDefault();
     if (!newServiceTitle.trim()) return;
+    const slug = newServiceTitle.toLowerCase().replaceAll(" ", "-");
     const newItem = {
       id: `SRV-0${services.length + 1}`,
       title: newServiceTitle,
@@ -87,6 +162,14 @@ export function AdminDashboard() {
       updated: "Just now",
     };
     setServices([newItem, ...services]);
+
+    // Commit to GitHub as JSON
+    await commitContentToGitHub(
+      `services/${slug}.json`,
+      newItem,
+      `cms: add service ${newServiceTitle}`
+    );
+
     setNewServiceTitle("");
     setNewServiceDesc("");
     setShowServiceModal(false);
@@ -151,15 +234,8 @@ export function AdminDashboard() {
             onClick={() => setActiveTab("settings")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${activeTab === "settings" ? "bg-rose-600 text-white shadow-lg shadow-rose-600/20" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}
           >
-            <Settings className="w-4 h-4" /> Settings
+            <Settings className="w-4 h-4" /> Settings & Git
           </button>
-          <Link
-            to="/keystatic/$"
-            params={{ _splat: "" }}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition-colors border border-dashed border-slate-700 mt-4"
-          >
-            <FileText className="w-4 h-4 text-rose-400" /> Keystatic Git CMS
-          </Link>
         </nav>
 
         <div className="pt-6 border-t border-slate-800 flex items-center justify-between">
@@ -183,6 +259,12 @@ export function AdminDashboard() {
             <h1 className="text-xl font-bold tracking-tight text-white capitalize">{activeTab} Dashboard</h1>
           </div>
           <div className="flex items-center gap-4">
+            {commitStatus && (
+              <div className="hidden xl:flex items-center gap-2 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-lg text-xs text-rose-300">
+                <Github className="w-3.5 h-3.5 text-rose-400" />
+                <span>{commitStatus}</span>
+              </div>
+            )}
             <div className="relative hidden sm:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
@@ -198,7 +280,7 @@ export function AdminDashboard() {
                 onClick={() => setShowServiceModal(true)}
                 className="hidden lg:flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-md shadow-rose-600/20 transition-colors"
               >
-                <Plus className="w-3.5 h-3.5" /> Add Content
+                <Plus className="w-3.5 h-3.5" /> Add Content (Git Commit)
               </button>
               <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-rose-600 to-amber-500 flex items-center justify-center font-bold text-sm text-white shadow-md">
                 36
@@ -209,6 +291,13 @@ export function AdminDashboard() {
 
         {/* Dynamic Tab Body */}
         <div className="p-6 md:p-8 flex-1 space-y-8">
+          {commitStatus && (
+            <div className="xl:hidden bg-slate-900 border border-slate-800 p-4 rounded-xl text-xs text-rose-300 flex items-center gap-2">
+              <Github className="w-4 h-4 text-rose-400 flex-shrink-0" />
+              <span>{commitStatus}</span>
+            </div>
+          )}
+
           {activeTab === "overview" && (
             <>
               {/* Stats Cards */}
@@ -216,7 +305,7 @@ export function AdminDashboard() {
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl flex items-center justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Enquiries</p>
-                    <h3 className="text-3xl font-extrabold text-white mt-1">{enquiries.pressCount ?? 440 + enquiries.length}</h3>
+                    <h3 className="text-3xl font-extrabold text-white mt-1">{440 + enquiries.length}</h3>
                     <span className="text-xs text-emerald-400 font-medium flex items-center gap-1 mt-2">
                       <ArrowUpRight className="w-3.5 h-3.5" /> +18.4% this month
                     </span>
@@ -257,11 +346,11 @@ export function AdminDashboard() {
                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Active Services</p>
                     <h3 className="text-3xl font-extrabold text-white mt-1">{services.length}</h3>
                     <span className="text-xs text-rose-400 font-medium flex items-center gap-1 mt-2">
-                      Managed via CMS
+                      Synced with GitHub
                     </span>
                   </div>
                   <div className="p-4 rounded-xl bg-rose-500/10 text-rose-400">
-                    <Sparkles className="w-6 h-6" />
+                    <Github className="w-6 h-6" />
                   </div>
                 </div>
               </div>
@@ -413,11 +502,11 @@ export function AdminDashboard() {
             <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl p-6 space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-bold text-white">CMS Content & Services Management</h3>
-                  <p className="text-xs text-slate-400">Manage active service offerings, pricing tiers and case studies displayed on the public site.</p>
+                  <h3 className="text-lg font-bold text-white">Services & GitHub CMS Content</h3>
+                  <p className="text-xs text-slate-400">Adding services here automatically creates a GitHub commit to your repository.</p>
                 </div>
                 <button onClick={() => setShowServiceModal(true)} className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-lg shadow-rose-600/20">
-                  <Plus className="w-4 h-4" /> Add New Service / Content
+                  <Github className="w-4 h-4" /> Add Service (Git Commit)
                 </button>
               </div>
 
@@ -431,7 +520,7 @@ export function AdminDashboard() {
                     <h4 className="text-base font-bold text-white">{srv.title}</h4>
                     <p className="text-xs text-slate-400">{srv.description}</p>
                     <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
-                      <span className="text-rose-400 font-medium cursor-pointer hover:underline">Edit Content</span>
+                      <span className="text-rose-400 font-medium">Synced via Git</span>
                       <span className="text-slate-500">Updated {srv.updated}</span>
                     </div>
                   </div>
@@ -441,35 +530,77 @@ export function AdminDashboard() {
           )}
 
           {activeTab === "settings" && (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl p-6 space-y-6 max-w-2xl">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl p-6 space-y-6 max-w-xl">
               <div>
-                <h3 className="text-lg font-bold text-white">Dashboard Settings</h3>
-                <p className="text-xs text-slate-400">Configure notifications, API integrations, and admin user permissions.</p>
+                <h3 className="text-lg font-bold text-white">GitHub Repository & Token Settings</h3>
+                <p className="text-xs text-slate-400">Configure your GitHub repo details and Personal Access Token to enable direct Git commits when adding content.</p>
               </div>
-              <div className="space-y-4">
+              <form onSubmit={saveGhSettings} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <label className="block space-y-1.5 text-sm">
+                    <span className="text-slate-300 font-medium">GitHub Owner / Org</span>
+                    <input
+                      type="text"
+                      value={ghOwner}
+                      onChange={(e) => setGhOwner(e.target.value)}
+                      placeholder="e.g. 36ixty"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-rose-500"
+                    />
+                  </label>
+                  <label className="block space-y-1.5 text-sm">
+                    <span className="text-slate-300 font-medium">Repository Name</span>
+                    <input
+                      type="text"
+                      value={ghRepo}
+                      onChange={(e) => setGhRepo(e.target.value)}
+                      placeholder="e.g. 36ixty-web"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-rose-500"
+                    />
+                  </label>
+                </div>
                 <label className="block space-y-1.5 text-sm">
-                  <span className="text-slate-300 font-medium">Company Name</span>
-                  <input type="text" defaultValue="36ixty Booths" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-rose-500" />
+                  <span className="text-slate-300 font-medium">Branch</span>
+                  <input
+                    type="text"
+                    value={ghBranch}
+                    onChange={(e) => setGhBranch(e.target.value)}
+                    placeholder="main"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-rose-500"
+                  />
                 </label>
                 <label className="block space-y-1.5 text-sm">
-                  <span className="text-slate-300 font-medium">Notification Email</span>
-                  <input type="email" defaultValue="hello@36ixtybooths.com" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-rose-500" />
+                  <span className="text-slate-300 font-medium">GitHub Personal Access Token (repo scope)</span>
+                  <input
+                    type="password"
+                    value={ghToken}
+                    onChange={(e) => setGhToken(e.target.value)}
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-rose-500 font-mono text-xs"
+                  />
+                  <span className="text-[11px] text-slate-500">Token requires `repo` scope permissions to create commits.</span>
                 </label>
-                <button className="bg-rose-600 hover:bg-rose-500 text-white px-5 py-2.5 rounded-xl font-medium text-sm transition-colors shadow-lg shadow-rose-600/20">
-                  Save Changes
-                </button>
-              </div>
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    className="bg-rose-600 hover:bg-rose-500 text-white px-5 py-2.5 rounded-xl font-medium text-sm transition-colors shadow-lg shadow-rose-600/20 flex items-center gap-2"
+                  >
+                    <Check className="w-4 h-4" /> Save GitHub Settings
+                  </button>
+                </div>
+              </form>
             </div>
           )}
         </div>
       </main>
 
-      {/* Add New Service Modal */}
+      {/* Add New Service / Git Commit Modal */}
       {showServiceModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 space-y-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <h3 className="text-lg font-bold text-white">Add New Service / Content</h3>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Github className="w-5 h-5 text-rose-400" /> Add Content & Commit to GitHub
+              </h3>
               <button onClick={() => setShowServiceModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
@@ -509,6 +640,9 @@ export function AdminDashboard() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-rose-500"
                 />
               </div>
+              <p className="text-[11px] text-slate-400 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                💡 Clicking "Commit & Publish" will push a new JSON file (`src/content/services/[slug].json`) directly to your GitHub repo via the GitHub Contents API.
+              </p>
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
                 <button
                   type="button"
@@ -519,9 +653,10 @@ export function AdminDashboard() {
                 </button>
                 <button
                   type="submit"
-                  className="bg-rose-600 hover:bg-rose-500 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors shadow-lg shadow-rose-600/20"
+                  disabled={isCommitting}
+                  className="bg-rose-600 hover:bg-rose-500 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors shadow-lg shadow-rose-600/20 flex items-center gap-2"
                 >
-                  Publish Content
+                  {isCommitting ? "Committing..." : "Commit & Publish"}
                 </button>
               </div>
             </form>
